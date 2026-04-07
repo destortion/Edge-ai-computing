@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Vision - Live</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a0a; color: #fff; font-family: monospace; }
+
+  #container {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+  }
+
+  #videoWrap {
+    position: relative;
+    width: 100%;
+    max-width: 480px;
+  }
+
+  video, canvas {
+    width: 100%;
+    border-radius: 12px;
+    display: block;
+  }
+
+  #overlay {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    border-radius: 12px;
+  }
+
+  #panel {
+    width: 100%;
+    max-width: 480px;
+    margin-top: 12px;
+    padding: 12px;
+    background: #111;
+    border-radius: 12px;
+    border: 1px solid #222;
+  }
+
+  #bars {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .breed-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 1 / 1;
+    background: #1a1a1a;
+    border: 2px solid #333;
+    border-radius: 8px;
+    padding: 8px 4px;
+    text-align: center;
+    transition: border-color 0.2s, background 0.2s;
+    cursor: default;
+    overflow: hidden;
+  }
+
+  .breed-card.top { border-color: #4a9eff; background: #0d1f33; }
+
+  .breed-card .card-label {
+    font-size: 0.65em;
+    color: #aaa;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+    text-align: center;
+  }
+
+  .breed-card .card-score {
+    font-size: 1em;
+    font-weight: bold;
+    color: #4a9eff;
+    margin-top: 4px;
+  }
+
+  .breed-card.top .card-label { color: #fff; }
+  .breed-card.top .card-score { color: #7bbfff; }
+
+  #fps { position: absolute; top: 8px; right: 12px; font-size: 0.7em; color: #0f0; background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 4px; }
+
+  #controls { margin-top: 10px; display: flex; gap: 8px; }
+  button {
+    flex: 1; padding: 10px; border: none; border-radius: 8px;
+    font-family: monospace; font-size: 0.9em; cursor: pointer;
+    background: #222; color: #fff;
+  }
+  button.active { background: #4a9eff; }
+  #status { font-size: 0.7em; color: #555; text-align: center; margin-top: 6px; }
+</style>
+</head>
+<body>
+<div id="container">
+  <div id="videoWrap">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="overlay"></canvas>
+    <span id="fps">-- fps</span>
+  </div>
+
+  <div id="panel">
+    <div id="bars"></div>
+    <div id="controls">
+      <button id="btnFront" class="active" onclick="switchCamera('user')">Front Cam</button>
+      <button id="btnBack" onclick="switchCamera('environment')">Back Cam</button>
+      <button id="btnPause" onclick="togglePause()">Pause</button>
+    </div>
+    <div id="status">Point camera at anything</div>
+  </div>
+</div>
+
+<canvas id="capture" style="display:none"></canvas>
+
+<script>
+let stream, paused = false, facingMode = "user";
+let lastTime = Date.now(), frameCount = 0, running = false;
+
+const video   = document.getElementById("video");
+const overlay = document.getElementById("overlay");
+const ctx     = overlay.getContext("2d");
+const capture = document.getElementById("capture");
+
+async function startCamera(facing) {
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: { ideal: facing }, width: { ideal: 640 } },
+    audio: false
+  });
+  video.srcObject = stream;
+  await new Promise(r => video.onloadedmetadata = r);
+  overlay.width  = video.videoWidth;
+  overlay.height = video.videoHeight;
+  capture.width  = video.videoWidth;
+  capture.height = video.videoHeight;
+  if (!running) { running = true; loop(); }
+}
+
+function switchCamera(facing) {
+  facingMode = facing;
+  document.getElementById("btnFront").className = facing === "user" ? "active" : "";
+  document.getElementById("btnBack").className  = facing === "environment" ? "active" : "";
+  startCamera(facing);
+}
+
+function togglePause() {
+  paused = !paused;
+  document.getElementById("btnPause").textContent = paused ? "Resume" : "Pause";
+}
+
+function captureFrame() {
+  const c = capture.getContext("2d");
+  c.drawImage(video, 0, 0);
+  return capture.toDataURL("image/jpeg", 0.6);
+}
+
+function drawOverlay(top5) {
+  ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+  if (!top5 || top5.length === 0) return;
+
+  const W = overlay.width, H = overlay.height;
+  const boxSize = Math.min(W, H) * 0.55;
+  const bx = (W - boxSize) / 2, by = (H - boxSize) / 2;
+
+  // Bounding box
+  ctx.strokeStyle = "#4a9eff";
+  ctx.lineWidth = 3;
+  ctx.strokeRect(bx, by, boxSize, boxSize);
+
+  // Corner accents
+  const cs = 20;
+  ctx.lineWidth = 5;
+  const corners = [[bx,by],[bx+boxSize,by],[bx,by+boxSize],[bx+boxSize,by+boxSize]];
+  const dirs = [[1,1],[-1,1],[1,-1],[-1,-1]];
+  corners.forEach(([cx,cy], i) => {
+    const [dx,dy] = dirs[i];
+    ctx.beginPath(); ctx.moveTo(cx+dx*cs, cy); ctx.lineTo(cx, cy); ctx.lineTo(cx, cy+dy*cs); ctx.stroke();
+  });
+
+  // Label above box
+  const label = top5[0].label + "  " + top5[0].score + "%";
+  ctx.font = "bold 16px monospace";
+  const tw = ctx.measureText(label).width + 16;
+  ctx.fillStyle = "rgba(0,0,0,0.65)";
+  ctx.fillRect(bx, by - 34, tw, 30);
+  ctx.fillStyle = "#4a9eff";
+  ctx.fillText(label, bx + 8, by - 12);
+}
+
+function updateBars(top5) {
+  const bars = document.getElementById("bars");
+  bars.innerHTML = top5.map((item, i) => `
+    <div class="breed-card${i === 0 ? " top" : ""}">
+      <span class="card-label">${item.label}</span>
+      <span class="card-score">${item.score}%</span>
+    </div>`).join("");
+}
+
+let inferring = false;
+async function loop() {
+  if (!paused && !inferring && video.readyState >= 2) {
+    inferring = true;
+    try {
+      const frame = captureFrame();
+      const res = await fetch("/predict", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: frame })
+      });
+      const data = await res.json();
+      drawOverlay(data.top5);
+      updateBars(data.top5);
+      document.getElementById("status").textContent =
+        `Top: ${data.top5[0].label} (${data.top5[0].score}%)`;
+
+      // FPS
+      frameCount++;
+      const now = Date.now();
+      if (now - lastTime >= 1000) {
+        document.getElementById("fps").textContent = frameCount + " fps";
+        frameCount = 0; lastTime = now;
+      }
+    } catch(e) {
+      document.getElementById("status").textContent = "Error: " + e.message;
+    }
+    inferring = false;
+  }
+  requestAnimationFrame(loop);
+}
+
+startCamera(facingMode);
+</script>
+</body>
+</html>
