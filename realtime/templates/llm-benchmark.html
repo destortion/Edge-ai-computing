@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Benchmarking Phi-3 Mini on a Phone | Satyam Sharma</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --card: #111118;
+    --border: #1e1e2e;
+    --accent: #4a9eff;
+    --green: #00ff88;
+    --purple: #a855f7;
+    --orange: #f97316;
+    --text: #e0e0e0;
+    --muted: #666;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    line-height: 1.7;
+    padding-bottom: 80px;
+  }
+
+  /* Hero */
+  .hero {
+    background: linear-gradient(135deg, #0a0a0f 0%, #0d1117 50%, #0a0f1a 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 60px 20px 50px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 50% 0%, rgba(74,158,255,0.08) 0%, transparent 70%);
+  }
+  .tag {
+    display: inline-block;
+    background: rgba(74,158,255,0.15);
+    color: var(--accent);
+    border: 1px solid rgba(74,158,255,0.3);
+    padding: 4px 14px;
+    border-radius: 99px;
+    font-size: 0.78em;
+    font-family: monospace;
+    letter-spacing: 0.05em;
+    margin-bottom: 20px;
+  }
+  .hero h1 {
+    font-size: clamp(1.8em, 5vw, 3em);
+    font-weight: 800;
+    line-height: 1.2;
+    background: linear-gradient(135deg, #fff 30%, var(--accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 16px;
+  }
+  .hero .sub {
+    color: #888;
+    font-size: 1em;
+    max-width: 580px;
+    margin: 0 auto 24px;
+  }
+  .meta { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; font-size: 0.8em; color: var(--muted); font-family: monospace; }
+  .meta span { display: flex; align-items: center; gap: 5px; }
+
+  /* Layout */
+  .container { max-width: 780px; margin: 0 auto; padding: 0 20px; }
+
+  /* Sections */
+  .section { padding: 44px 0 0; }
+  .section-label {
+    font-size: 0.72em; font-family: monospace; letter-spacing: 0.1em;
+    color: var(--accent); text-transform: uppercase; margin-bottom: 10px;
+  }
+  h2 { font-size: 1.45em; font-weight: 700; color: #fff; margin-bottom: 14px; }
+  p { color: #aaa; margin-bottom: 14px; font-size: 0.97em; }
+
+  /* Spec card */
+  .spec-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+    margin: 20px 0;
+  }
+  .spec-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .spec-card .spec-label { font-size: 0.68em; color: var(--muted); font-family: monospace; text-transform: uppercase; margin-bottom: 6px; }
+  .spec-card .spec-val { font-size: 1.05em; font-weight: 600; color: #fff; }
+  .spec-card .spec-sub { font-size: 0.72em; color: var(--muted); margin-top: 2px; }
+
+  /* Benchmark table */
+  .bench-table {
+    width: 100%; border-collapse: collapse;
+    background: var(--card); border-radius: 12px;
+    overflow: hidden; border: 1px solid var(--border);
+    margin: 20px 0; font-size: 0.88em;
+  }
+  .bench-table th {
+    background: #16161f; color: var(--muted);
+    font-family: monospace; font-size: 0.78em;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    padding: 10px 14px; text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  .bench-table td {
+    padding: 10px 14px; border-bottom: 1px solid #16161f;
+    color: #ccc;
+  }
+  .bench-table tr:last-child td { border-bottom: none; }
+  .bench-table .val { color: var(--accent); font-family: monospace; font-weight: 600; }
+  .bench-table .good { color: var(--green); font-family: monospace; font-weight: 600; }
+
+  /* Bar chart */
+  .bar-chart { margin: 20px 0; display: flex; flex-direction: column; gap: 10px; }
+  .bar-row { display: flex; flex-direction: column; gap: 4px; }
+  .bar-label { font-size: 0.8em; color: #aaa; display: flex; justify-content: space-between; }
+  .bar-label .bar-num { color: var(--accent); font-family: monospace; font-weight: 600; }
+  .bar-track { height: 10px; background: #1a1a2a; border-radius: 99px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--accent), #7bbfff); transition: width 1s ease; }
+
+  /* Highlight box */
+  .highlight {
+    background: rgba(74,158,255,0.07);
+    border: 1px solid rgba(74,158,255,0.2);
+    border-radius: 12px;
+    padding: 18px 20px;
+    margin: 20px 0;
+  }
+  .highlight .hl-title { color: var(--accent); font-weight: 600; margin-bottom: 6px; font-size: 0.95em; }
+  .highlight p { margin: 0; font-size: 0.88em; }
+
+  /* Code block */
+  .code-block {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    font-family: monospace;
+    font-size: 0.82em;
+    color: #7ec8e3;
+    overflow-x: auto;
+    margin: 14px 0;
+    line-height: 1.7;
+  }
+  .code-block .comment { color: #555; }
+  .code-block .cmd { color: var(--green); }
+
+  /* Stat callouts */
+  .stat-row { display: flex; gap: 12px; margin: 20px 0; flex-wrap: wrap; }
+  .stat-box {
+    flex: 1; min-width: 130px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 16px; text-align: center;
+  }
+  .stat-box .stat-num { font-size: 2em; font-weight: 800; color: var(--accent); font-family: monospace; line-height: 1; }
+  .stat-box .stat-unit { font-size: 0.75em; color: var(--muted); margin-top: 2px; }
+  .stat-box .stat-label { font-size: 0.75em; color: #888; margin-top: 6px; }
+
+  /* Footer nav */
+  .footer-nav {
+    margin-top: 60px; padding-top: 30px;
+    border-top: 1px solid var(--border);
+    display: flex; justify-content: space-between;
+    align-items: center; flex-wrap: wrap; gap: 12px;
+  }
+  .footer-nav a {
+    color: var(--accent); text-decoration: none;
+    font-size: 0.85em; font-family: monospace;
+  }
+  .footer-nav a:hover { text-decoration: underline; }
+  .back-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: var(--muted); font-size: 0.82em; font-family: monospace;
+    text-decoration: none; margin: 30px 0 0;
+  }
+  .back-link:hover { color: var(--accent); }
+
+  .divider { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div style="position:relative;z-index:1;">
+    <div class="tag">BENCHMARK · PHI-3 MINI · ON-DEVICE LLM</div>
+    <h1>Running a 3.8B LLM<br>on a Phone — With Numbers</h1>
+    <p class="sub">Real benchmark results for Phi-3 Mini Q4 running fully on-device via llama.cpp on Android — no cloud, no GPU.</p>
+    <div class="meta">
+      <span>📱 Samsung Galaxy S24</span>
+      <span>⚙️ Snapdragon 8 Gen 3 · 12GB RAM</span>
+      <span>📅 April 2026</span>
+      <span>🔧 llama.cpp · Termux</span>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+
+  <a class="back-link" href="/blog">← Back to blog</a>
+
+  <!-- Device Specs -->
+  <div class="section">
+    <div class="section-label">01 — Setup</div>
+    <h2>The Hardware</h2>
+    <p>No cloud. No server. Just a phone running an LLM locally through Termux. Here's what's under the hood:</p>
+    <div class="spec-grid">
+      <div class="spec-card">
+        <div class="spec-label">Device</div>
+        <div class="spec-val">Galaxy S24</div>
+        <div class="spec-sub">Android 14</div>
+      </div>
+      <div class="spec-card">
+        <div class="spec-label">CPU</div>
+        <div class="spec-val">Snapdragon</div>
+        <div class="spec-sub">8 Gen 3 · 8 cores · aarch64</div>
+      </div>
+      <div class="spec-card">
+        <div class="spec-label">RAM</div>
+        <div class="spec-val">12 GB</div>
+        <div class="spec-sub">~3.4 GB free during test</div>
+      </div>
+      <div class="spec-card">
+        <div class="spec-label">Model</div>
+        <div class="spec-val">Phi-3 Mini</div>
+        <div class="spec-sub">3.82B params · Q4_K_M</div>
+      </div>
+      <div class="spec-card">
+        <div class="spec-label">Model Size</div>
+        <div class="spec-val">2.23 GiB</div>
+        <div class="spec-sub">Quantized from 7.6 GB</div>
+      </div>
+      <div class="spec-card">
+        <div class="spec-label">Runtime</div>
+        <div class="spec-val">llama.cpp</div>
+        <div class="spec-sub">CPU-only · no GPU</div>
+      </div>
+    </div>
+
+    <div class="highlight">
+      <div class="hl-title">Why Phi-3 Mini?</div>
+      <p>Microsoft's Phi-3 Mini is a 3.8B parameter model that punches well above its size — designed specifically for edge devices. At Q4_K_M quantization it fits in ~2.3 GB of RAM, making it one of the few genuinely capable models that can run on a phone.</p>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- Benchmark Results -->
+  <div class="section">
+    <div class="section-label">02 — Results</div>
+    <h2>Benchmark Numbers</h2>
+    <p>Run using <code style="background:#1a1a2a;padding:1px 6px;border-radius:4px;font-size:0.9em;">llama-bench</code> — 3 repetitions each, averaged. Two key metrics: <strong style="color:#fff">prompt processing</strong> (how fast it reads your input) and <strong style="color:#fff">token generation</strong> (how fast it writes the reply).</p>
+
+    <div class="stat-row">
+      <div class="stat-box">
+        <div class="stat-num">32.9</div>
+        <div class="stat-unit">tokens/sec</div>
+        <div class="stat-label">Prompt Processing (pp512)</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num">8.7</div>
+        <div class="stat-unit">tokens/sec</div>
+        <div class="stat-label">Text Generation (tg128)</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num">2.23</div>
+        <div class="stat-unit">GiB RAM</div>
+        <div class="stat-label">Model footprint</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num">4</div>
+        <div class="stat-unit">threads</div>
+        <div class="stat-label">Optimal thread count</div>
+      </div>
+    </div>
+
+    <h2 style="margin-top:30px;">Token Generation vs Thread Count</h2>
+    <p>More threads ≠ always faster. At 8 threads, thermal throttling kicks in and performance drops. 4 threads hit the sweet spot on the Snapdragon 8 Gen 3.</p>
+
+    <div class="bar-chart">
+      <div class="bar-row">
+        <div class="bar-label"><span>4 threads (optimal)</span><span class="bar-num">8.70 t/s</span></div>
+        <div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>8 threads</span><span class="bar-num">6.81 t/s</span></div>
+        <div class="bar-track"><div class="bar-fill" style="width:78%"></div></div>
+      </div>
+    </div>
+
+    <h2 style="margin-top:30px;">Prompt Processing vs Context Length</h2>
+    <p>Processing speed decreases as context grows — expected, since attention scales quadratically. Still, even at 1024 tokens it holds above 21 t/s.</p>
+
+    <div class="bar-chart">
+      <div class="bar-row">
+        <div class="bar-label"><span>pp128 (short prompt)</span><span class="bar-num">28.54 t/s</span></div>
+        <div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>pp512 (medium prompt)</span><span class="bar-num">22.65 t/s</span></div>
+        <div class="bar-track"><div class="bar-fill" style="width:79%"></div></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>pp1024 (long prompt)</span><span class="bar-num">21.59 t/s</span></div>
+        <div class="bar-track"><div class="bar-fill" style="width:75%"></div></div>
+      </div>
+    </div>
+
+    <table class="bench-table">
+      <thead>
+        <tr>
+          <th>Test</th>
+          <th>Threads</th>
+          <th>Speed</th>
+          <th>Std Dev</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>pp512</td><td>8</td><td class="val">32.95 t/s</td><td>±4.44</td><td>Prompt ingestion</td></tr>
+        <tr><td>tg128</td><td>8</td><td class="val">6.81 t/s</td><td>±1.25</td><td>Token generation</td></tr>
+        <tr><td>tg128</td><td>4</td><td class="good">8.70 t/s</td><td>±0.68</td><td>Best config ✓</td></tr>
+        <tr><td>pp128</td><td>8</td><td class="val">28.54 t/s</td><td>±2.80</td><td>Short prompt</td></tr>
+        <tr><td>pp1024</td><td>8</td><td class="val">21.59 t/s</td><td>±0.54</td><td>Long context</td></tr>
+        <tr><td>tg64</td><td>8</td><td class="val">4.08 t/s</td><td>±0.40</td><td>Short generation</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <hr class="divider">
+
+  <!-- How it was built -->
+  <div class="section">
+    <div class="section-label">03 — Setup</div>
+    <h2>How to Reproduce This</h2>
+    <p>Everything runs inside Termux on Android — no root required. The full stack: llama.cpp for inference, Flask for the web UI, and a custom slash-command chat interface built from scratch.</p>
+
+    <div class="code-block">
+<span class="comment"># 1. Install Termux + build tools</span>
+pkg install -y cmake ninja clang git python
+
+<span class="comment"># 2. Build llama.cpp</span>
+<span class="cmd">git clone https://github.com/ggerganov/llama.cpp</span>
+cd llama.cpp && cmake -B build && cmake --build build -j4
+
+<span class="comment"># 3. Download Phi-3 Mini Q4</span>
+<span class="cmd">curl -L -o models/phi3-mini.gguf \
+  "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf"</span>
+
+<span class="comment"># 4. Start inference server</span>
+<span class="cmd">./build/bin/llama-server -m models/phi3-mini.gguf -c 4096 -t 4 --port 8080</span>
+
+<span class="comment"># 5. Run the benchmark</span>
+<span class="cmd">./build/bin/llama-bench -m models/phi3-mini.gguf -o md -r 3 -t 4</span>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- Analysis -->
+  <div class="section">
+    <div class="section-label">04 — Analysis</div>
+    <h2>What the Numbers Mean</h2>
+    <p>At <strong style="color:#fff">8.7 tokens/second</strong>, a 100-token reply takes about 11 seconds. That's not fast, but it's <em>usable</em> — especially for offline tasks like document summarization, OCR analysis, or local Q&A.</p>
+    <p>For context, human reading speed is ~4–5 words/sec (~5–6 tokens/sec). So the model generates text just slightly faster than you can comfortably read it — which is the right target for a local assistant.</p>
+
+    <div class="highlight">
+      <div class="hl-title">Key Takeaway</div>
+      <p>The bottleneck isn't the model — it's memory bandwidth. The Snapdragon 8 Gen 3 has enough CPU muscle, but moving 2.23 GB of weights through RAM repeatedly is the real cost. Quantization (Q4_K_M) gets that cost 70% cheaper than float16 with minimal quality loss.</p>
+    </div>
+
+    <p>The 4-thread sweet spot is because the Snapdragon has 4 performance cores and 4 efficiency cores. Using all 8 threads pulls in the efficiency cores, which are slower and cause load imbalance — so 4 threads on the perf cores only is faster.</p>
+  </div>
+
+  <hr class="divider">
+
+  <!-- What's built on top -->
+  <div class="section">
+    <div class="section-label">05 — Application</div>
+    <h2>What I Built On Top</h2>
+    <p>The inference server is just the foundation. On top of it I built a full chat UI with:</p>
+    <ul style="color:#aaa; padding-left:20px; margin-bottom:14px; font-size:0.97em; display:flex; flex-direction:column; gap:6px;">
+      <li>Streaming responses via Server-Sent Events</li>
+      <li>Slash commands — <code style="background:#1a1a2a;padding:1px 5px;border-radius:3px;font-size:0.88em;">/summarize</code>, <code style="background:#1a1a2a;padding:1px 5px;border-radius:3px;font-size:0.88em;">/explain</code>, <code style="background:#1a1a2a;padding:1px 5px;border-radius:3px;font-size:0.88em;">/bullets</code>, <code style="background:#1a1a2a;padding:1px 5px;border-radius:3px;font-size:0.88em;">/calc</code></li>
+      <li>OCR pipeline — snap a photo, extract text, analyze with AI in one command (<code style="background:#1a1a2a;padding:1px 5px;border-radius:3px;font-size:0.88em;">/deepsearch</code>)</li>
+      <li>Stop generation mid-stream</li>
+      <li>Dark/light theme, per-message copy, token stats</li>
+    </ul>
+    <p>All running on the same phone. No API keys, no data leaving the device.</p>
+  </div>
+
+  <div class="footer-nav">
+    <a href="/blog">← Edge AI Blog</a>
+    <span style="color:var(--muted); font-size:0.8em; font-family:monospace;">Satyam Sharma · 2026</span>
+    <a href="/">Live Demo →</a>
+  </div>
+
+</div>
+</body>
+</html>

@@ -41,6 +41,10 @@ def index():
 def blog():
     return render_template("blog.html")
 
+@app.route("/llm-benchmark")
+def llm_benchmark():
+    return render_template("llm-benchmark.html")
+
 @app.route("/predict", methods=["POST"])
 def predict():
     data = request.json.get("image", "")
